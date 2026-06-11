@@ -1,0 +1,41 @@
+# experiment name
+note: train_group
+
+#project basic
+task: group  # hmr relation joint group
+
+#model basic
+gpu_index: 0
+lr: 0.0001
+batchsize: 1
+epoch: 2000
+worker: 2
+use_sch: False
+
+#********dataset*********#
+# The path for datasets and annotations
+data_folder: data
+
+# LargeCrowd
+trainset: LargeCrowd
+# LargeCrowd
+testset: LargeCrowd
+
+# cliff hmr cliff_hmr pose_transformer_v8  relation relation_v8
+model: relation_group_v3
+use_prior: False
+
+mode: train # train/test/eval
+
+
+# Use pretrain model and the corresponding path
+pretrain: False
+pretrain_dir: pretrained/Group/relation_group.pkl
+
+# The name of your training loss function
+# Split different names with a single space
+train_loss: Edge_BCE_Loss Contrast_Loss  # Edge_BCE_Loss Contrast_Loss
+# test_loss: MPJPE_H36M #MPJPE #MPJPE PCK PA_MPJPE MPJPE_H36M
+
+#visualize
+viz: False
