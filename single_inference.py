@@ -4,14 +4,21 @@
  @Email       : jiangyc160@163.com
  @Description : 
 '''
+
 import os
-import torch
+import sys
+import pickle
 import numpy as np
 import cv2
-import pickle
+import torch
 import joblib
+from tqdm import tqdm
 
-from model.relation_group_v3 import relation_group_v3  # 统一使用 v4
+sys.path.append('./')
+
+from camerahmr.camerahmr_core import CameraHMR_Predictor
+from yolox.yolox import Predictor
+from model.relation_group_v3 import relation_group_v3
 from model.flow_matching_group import flow_matching_group
 from utils.smpl_torch_batch import SMPLModel
 from utils.compute_pred_id import solve 
@@ -19,18 +26,19 @@ from utils.cliff_module import prepare_cliff
 from process import *
 from utils.vis import save_demo_results
 
-def load_pkl_safe(file_path):
-    """兼容不同方式保存的 pkl 文件"""
-    try:
-        with open(file_path, 'rb') as f:
-            return pickle.load(f, encoding='latin1')
-    except Exception:
-        try:
-            return joblib.load(file_path)
-        except Exception:
-            with open(file_path, 'rb') as f:
-                return pickle.load(f)
+img_root = "demo_data"
+OUTPUT_DIR = 'output/demo'
 
+yolox_model_dir = "pretrained/yolox_data/bytetrack_x_mot17.pth.tar"
+yolox_thres = 0.25
+
+GROUP_CKPT = 'pretrained/Group/relation_group.pkl'
+RECON_CKPT = 'pretrained/GroupInt/flow_matching_group.pkl'
+
+
+# ==================================================
+# 单帧推理
+# ==================================================
 class SingleInference:
     def __init__(self, group_ckpt_path, recon_ckpt_path, device='cuda'):
         self.device = torch.device(device)
@@ -76,33 +84,29 @@ class SingleInference:
         # ==========================================
         # Step 1: 批量提取 Bbox
         # ==========================================
-        # 收集所有 bbox，形状为 (num_people, 4) -> [min_x, min_y, max_x, max_y]
         boxes = np.array([p["bbox"] for p in people], dtype=np.float32)
         
-        # 读取整图一次 (H, W, 3)
         try:
             img = cv2.imread(img_path)[:,:,::-1].copy().astype(np.float32)
         except TypeError:
-            print(img_path)
+            print(f"Failed to read image for cliff: {img_path}")
+            return None
 
-        # 批量裁剪、归一化并计算中心点、尺度、焦距等
         cliff_data = prepare_cliff(img, boxes, intris=None)
 
-        # 提取结果并增加 batch 维度 (1, num_people, ...)
-        norm_imgs = cliff_data["norm_img"].unsqueeze(0)         # (1, N, 3, 256, 192)
-        centers = cliff_data["center"].unsqueeze(0)             # (1, N, 2)
-        scales = cliff_data["scale"].unsqueeze(0)               # (1, N)
-        img_hs = cliff_data["img_h"].unsqueeze(0)               # (1, N)
-        img_ws = cliff_data["img_w"].unsqueeze(0)               # (1, N)
-        focal_lengths = cliff_data["focal_length"].unsqueeze(0) # (1, N)
+        norm_imgs = cliff_data["norm_img"].unsqueeze(0)         
+        centers = cliff_data["center"].unsqueeze(0)             
+        scales = cliff_data["scale"].unsqueeze(0)               
+        img_hs = cliff_data["img_h"].unsqueeze(0)               
+        img_ws = cliff_data["img_w"].unsqueeze(0)               
+        focal_lengths = cliff_data["focal_length"].unsqueeze(0) 
 
         # ==========================================
-        # Step 2: 提取 pkl 中的其他特征字段
+        # Step 2: 提取特征字段
         # ==========================================
         valid = torch.zeros((1, max_people), dtype=torch.float32)
         valid[0, :num_people] = 1.0
 
-        
         img_features = torch.zeros((1, max_people, 1280), dtype=torch.float32)
         camerahmr_poses = torch.zeros((1, max_people, 24, 3, 3), dtype=torch.float32)
         camerahmr_betas = torch.zeros((1, max_people, 10), dtype=torch.float32)
@@ -117,7 +121,6 @@ class SingleInference:
             camerahmr_trans[0, idx] = torch.from_numpy(person["camerahmr_trans_2"]).float()
             camerahmr_focal_length[0, idx] = torch.from_numpy(person["camerahmr_focal_length_2"]).float()
             
-            # 处理 2D keypoints，使用 cliff 计算出的 center 进行归一化
             if self.use_rfkp:
                 rf_kp = person["halpe_joints_2d_pred"].copy()
                 center_xy = centers[0, idx].numpy()
@@ -125,9 +128,8 @@ class SingleInference:
                 rf_kps[0, idx] = torch.from_numpy(rf_kp).float()
 
         # ==========================================
-        # Step 3: 生成 spatial_mask 并组装数据
+        # Step 3: 组装数据
         # ==========================================
-
         data = {
             'valid': valid.to(device),
             'imgname': [img_path], 
@@ -144,77 +146,124 @@ class SingleInference:
             'img_h': img_hs.to(device),
             'img_w': img_ws.to(device),
             'img': norm_imgs.to(device)
-            # 'spatial_mask': spatial_mask.to(device)
         }
         return data
 
     @torch.no_grad()
-    def run_on_pkl(self, pkl_path, OUTPUT_DIR):
-        print(f"\n Loading data from: {pkl_path}")
-        params = load_pkl_safe(pkl_path)
+    def infer_single_frame(self, frame_data, output_dir):
+        """对单帧数据进行分组与重建推理"""
+        num_people = len(frame_data['people'])
+        if num_people == 0:
+            return
+
+        # Step 1: 数据加载与预处理
+        data = self.prepare_single_frame(frame_data, num_people, self.device)
+        if data is None:
+            return
+
+        # Step 2: 分组推理
+        group_pred = self.group_model(data)
+        pred_group_id = solve(group_pred) 
         
-        frames_data = []
-        max_people = 0
-        for frame in params:
-            people_data = [p for k, p in frame.items() if k not in ['img_path', 'h_w']]
-            if len(people_data) > max_people:
-                max_people = len(people_data)
-            frames_data.append({
-                'img_path': frame['img_path'],
-                'img_hw': frame['h_w'],
-                'people': people_data
-            })
-        
-        print(f" Found {len(frames_data)} frames. Max people per frame: {max_people}")
+        # Step 3: 注入 group_id
+        data['group_id'] = pred_group_id
+        data = to_device(data, self.device)
+        data = extract_valid_demo(data)
 
-        for frame_idx, frame_data in enumerate(frames_data):
-            print(f"\n--- Processing Frame {frame_idx + 1}/{len(frames_data)} ---")
-            
-            # Step 1: 数据加载
-            data = self.prepare_single_frame(frame_data, max_people, self.device)
+        # Step 4: 群体重建推理
+        recon_pred = self.recon_model(data)
 
-            # Step 2: 分组推理
-            group_pred = self.group_model(data)
-            pred_group_id = solve(group_pred) 
-            
-            # Step 3: 注入 group_id
-            data['group_id'] = pred_group_id
-            # valid_ids = data['valid'].squeeze(0).cpu().numpy()
-            # pred_ids = pred_group_id.squeeze(0).cpu().numpy()
-            # print(f" Predicted Group IDs for valid persons: {pred_ids[valid_ids == 1]}")
+        # Step 5: 整理输出结果并保存
+        results = {
+            'imgs': data['imgname'],
+            'pred_verts': recon_pred['pred_verts'].detach().cpu().numpy().astype(np.float32),
+            'pred_trans': recon_pred['pred_cam_t'].detach().cpu().numpy().astype(np.float32),
+            'focal_length': recon_pred['focal_length'].detach().cpu().numpy().astype(np.float32)
+        }
 
-            data = to_device(data, self.device)
-            data = extract_valid_demo(data)
+        save_demo_results(self, results=results, output_dir=output_dir)
 
-            # Step 4: 群体重建推理
-            recon_pred = self.recon_model(data)
 
-            # Step 5: 整理输出结果
-            results = {}
-            results.update(imgs=data['imgname'])
-            results.update(pred_verts=recon_pred['pred_verts'].detach().cpu().numpy().astype(np.float32))
-            results.update(pred_trans=recon_pred['pred_cam_t'].detach().cpu().numpy().astype(np.float32))
-            results.update(focal_length=recon_pred['focal_length'].detach().cpu().numpy().astype(np.float32))
+def main():
+    # 1. 初始化检测器 (YOLOX)
+    print("Initializing YOLOX Detector...")
+    detector = Predictor(yolox_model_dir, yolox_thres)
 
-            save_demo_results(
-                self,
-                results=results,
-                output_dir=OUTPUT_DIR
-            )
-            
+    # 2. 初始化 CameraHMR
+    print("Initializing CameraHMR...")
+    predictor = CameraHMR_Predictor()
 
-if __name__ == '__main__':
-    PKL_PATH = 'demo_data/demo.pkl'
-    GROUP_CKPT = 'pretrained/Group/relation_group.pkl'
-    RECON_CKPT = 'pretrained/GroupInt/flow_matching_group.pkl'
-    OUTPUT_DIR = 'output/demo'
-    
+    # 3. 初始化群体重建推理器
     inferencer = SingleInference(
         group_ckpt_path=GROUP_CKPT,
         recon_ckpt_path=RECON_CKPT,
         device='cuda'
     )
 
-    inferencer.run_on_pkl(PKL_PATH, OUTPUT_DIR)
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+    valid_imgs = [
+        f for f in sorted(os.listdir(img_root)) 
+        if f.split('.')[-1].lower() in ['jpg', 'jpeg', 'png']
+    ]
     
-    print(f"\n All done! Check your results in: {OUTPUT_DIR}")
+    print(f"\n Start processing {len(valid_imgs)} images...")
+    for img_name in tqdm(valid_imgs):
+
+        img_path = os.path.abspath(os.path.join(img_root, img_name))
+        img_cv2 = cv2.imread(img_path)
+
+        if img_cv2 is None:
+            print(f"Failed to read image: {img_path}")
+            continue
+
+        h, w = img_cv2.shape[:2]
+
+        # ==========================================
+        # stage1：人体检测与 CameraHMR 特征提取
+        # ==========================================
+        results, _ = detector.predict(img_cv2, viz=False)
+        boxes = results['bbox']
+
+        if len(boxes) == 0:
+            print(f"No person detected in {img_name}, skipping.")
+            continue
+
+        try:
+            (pred_poses, pred_betas, pred_cam, pred_trans, focal_length, features) = \
+                predictor.process_image(img_path, boxes)
+        except Exception as e:
+            print(f"CameraHMR failed on {img_name}: {e}")
+            continue
+
+        num_people = len(pred_poses)
+
+        
+        people = []
+        for person_idx in range(num_people):
+            person_data = {
+                'camerahmr_poses_2': pred_poses[person_idx].detach().cpu().numpy().astype(np.float32),
+                'camerahmr_betas_2': pred_betas[person_idx].detach().cpu().numpy().astype(np.float32),
+                'camerahmr_trans_2': pred_trans[person_idx].detach().cpu().numpy().astype(np.float32),
+                'gt_box_camerahmr_features_2': features[person_idx].detach().cpu().numpy().astype(np.float32),
+                'bbox': np.asarray(boxes[person_idx], dtype=np.float32),
+                'camerahmr_focal_length_2': np.array([focal_length[person_idx].item()], dtype=np.float32)
+            }
+            people.append(person_data)
+
+        frame_data = {
+            'img_path': img_path,
+            'img_hw': (h, w),
+            'people': people
+        }
+
+        # ==========================================
+        # stage2：直接进行单帧推理并保存结果
+        # ==========================================
+        inferencer.infer_single_frame(frame_data, OUTPUT_DIR)
+
+    print(f"\n✅ All done! Check your results in: {OUTPUT_DIR}")
+
+
+if __name__ == '__main__':
+    main()

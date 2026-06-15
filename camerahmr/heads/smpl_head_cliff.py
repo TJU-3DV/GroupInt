@@ -24,7 +24,7 @@ class SMPLTransformerDecoderHead(nn.Module):
             token_dim=(3 + npose + NUM_BETAS + 3),
             dim=1024,
         )
-        transformer_args = (transformer_args | dict(TRANSFORMER_DECODER))
+        transformer_args = {**transformer_args, **dict(TRANSFORMER_DECODER)}
         self.transformer = TransformerDecoder(
             **transformer_args
         )

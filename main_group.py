@@ -6,14 +6,14 @@
 '''
 import torch
 from torch.utils.data import DataLoader
-from cmd_parser import parse_config
+from utils.cmd_parser import parse_config
 from utils.module_utils import seed_worker, set_seed
 from modules import init, LossLoader, ModelLoader, DatasetLoader
 # import os
 # os.environ['PYOPENGL_PLATFORM'] = 'egl'
 ###########Load config file in debug mode#########
 import sys
-sys.argv = ['','--config=cfg_files/config_group.yaml'] #MoCap End2End HMAE_conv Lifting
+# sys.argv = ['','--config=cfg_files/config_group.yaml'] #MoCap End2End HMAE_conv Lifting
 
 def main(**args):
     seed = 7

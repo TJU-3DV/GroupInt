@@ -6,16 +6,11 @@ The official code for paper "GroupInt: Group-Centric Crowd Reconstruction via Mu
 ![figure](/assets/Pipeline.png)
 
 ## Installation 
-**Step1:** <br>
-
-Create conda environment and install dependencies for CameraHMR, refer to [GitHub - pixelite1201/CameraHMR · GitHub](https://github.com/pixelite1201/CameraHMR). <br>
-
-**Step2:** <br>
-
 Create conda environment and install dependencies for GroupInt. <br>
 
 ```
 conda create -n groupint python=3.8
+conda activate groupint
 pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu111 # install pytorch
 pip install -r requirements.txt
 ```
@@ -27,27 +22,19 @@ pip install -r requirements.txt
 Download the official SMPL model from [SMPLify website](http://smplify.is.tuebingen.mpg.de/) and put it in `smpl/smpl/SMPL_NEUTRAL.pkl`. <br>
 
 **Step2:** <br>
-Download trained models from [Baidu Netdisk(pwd=gnx5)](https://pan.baidu.com/s/1qoA5MFF_w8uzYIp7RU8TsA) and put them in `pretrained`. You may also need to download trained models for camerahmr from their official websites. <br>
+Download trained models from [Baidu Netdisk](https://pan.baidu.com/s/1qoA5MFF_w8uzYIp7RU8TsA?pwd=gnx5) and put them in `pretrained`. You may also need to download trained models for camerahmr from the [CameraHMR website](https://camerahmr.is.tue.mpg.de/). <br>
 
 **Step3:** <br>
 
-Run demo for camerahmr annots.
+Run demo.
 
 ```
-conda activate camerahmr
-python Annot_CameraHMR.py 
-```
-
-Run demo for GroupInt.
-
-```
-conda activate groupint
 python single_inference.py 
 ```
 
 ## Train
 
-You can download the training data from [Baidu Netdisk(pwd=j7cj)](https://pan.baidu.com/s/1J-WPBxhT5GgzRfoamuFboA) and place it in the `data` directory. 
+You can download the training data from [Baidu Netdisk](https://pan.baidu.com/s/1J-WPBxhT5GgzRfoamuFboA?pwd=j7cj) and place it in the `data` directory. 
 
 Train for group.
 
@@ -65,7 +52,13 @@ python main_rec.py --config cfg_files/config_rec.yaml
 
 We provide annotations of the group_id for LargeCrowd dataset. You may also need to download image files from their official websites.
 
-[[Annotations]()]
+[[Annotations](https://pan.baidu.com/s/1-P8ltTd6_i3Q46Oyumgifg?pwd=1kfb)]
+
+![figure](/assets/Annot.jpg)
+
+## Visualization
+
+![figure](/assets/vis.jpg)
 
 ## Acknowledgments
 Some of the code are based on the following works. We gratefully appreciate the impact it has on our work.<br>

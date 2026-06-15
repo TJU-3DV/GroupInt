@@ -164,7 +164,7 @@ class LossLoader():
                 Mesh_loss = self.train_loss['Mesh_Loss'](pred['pred_verts'], gt['verts'], gt['has_smpl'])
                 loss_dict = {**loss_dict, **Mesh_loss}
             elif ltype == 'Joint_Loss':
-                gt['has_3d'] = gt['has_3d'].squeeze(1)
+                # gt['has_3d'] = gt['has_3d'].squeeze(1)
                 Joint_Loss = self.train_loss['Joint_Loss'](pred['pred_joints'], gt['gt_joints'], gt['has_3d'])
                 loss_dict = {**loss_dict, **Joint_Loss}
             elif ltype == 'Skeleton_Loss':
@@ -199,7 +199,7 @@ class LossLoader():
                 pass
         loss = 0
         for k in loss_dict:
-            loss_temp = loss_dict[k] * 60.
+            loss_temp = loss_dict[k]
             loss += loss_temp
             loss_dict[k] = round(float(loss_temp.detach().cpu().numpy()), 6)
         return loss, loss_dict

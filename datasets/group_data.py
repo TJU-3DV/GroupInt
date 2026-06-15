@@ -1,8 +1,7 @@
 '''
- @FileName    : dataset.py
- @EditTime    : 2022-09-27 16:03:55
- @Author      : Buzhen Huang
- @Email       : hbz@seu.edu.cn
+ @FileName    : group_data.py
+ @Author      : Yanchi Jiang
+ @Email       : jiangyc160@163.com
  @Description : 
 '''
 

@@ -6,6 +6,7 @@ import random
 import cv2
 from typing import List, Dict, Tuple
 from yacs.config import CfgNode
+from typing import Union
 
 
 def resize_image(img, target_size):
@@ -517,7 +518,7 @@ def rot_aa(aa: np.array, rot: float) -> np.array:
     aa = (resrot.T)[0]
     return aa.astype(np.float32)
 
-def get_example_projverts(img_path: str|np.ndarray, center_x: float, center_y: float,
+def get_example_projverts(img_path: Union[str, np.ndarray], center_x: float, center_y: float,
                          width: float, height: float,
                          keypoints_2d: np.array,
                          flip_kp_permutation: List[int],
@@ -623,7 +624,7 @@ def get_example_projverts(img_path: str|np.ndarray, center_x: float, center_y: f
     return img_patch, img_patch_cv, img_size, center_x, center_y, width, height, keypoints_2d, proj_verts, trans
 
 
-def get_example(img_path: str|np.ndarray, center_x: float, center_y: float,
+def get_example(img_path: Union[str, np.ndarray], center_x: float, center_y: float,
                 width: float, height: float,
                 keypoints_2d: np.array,
                 flip_kp_permutation: List[int],
