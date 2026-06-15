@@ -54,7 +54,7 @@ We provide annotations of the group_id for LargeCrowd dataset. You may also need
 
 [[Annotations](https://pan.baidu.com/s/1-P8ltTd6_i3Q46Oyumgifg?pwd=1kfb)]
 
-![figure](/assets/Annot.jpg)
+![figure](/assets/annot.jpg)
 
 ## Visualization
 
