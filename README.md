@@ -2,7 +2,7 @@
 
 The official code for paper "GroupInt: Group-Centric Crowd Reconstruction via Multi-Scale Interaction Analysis"<br>
 
-[Buzhen Huang](https://www.buzhenhuang.com/), [Yanchi Jiang](), [Xie Yitao](), [Kun Li](https://cic.tju.edu.cn/faculty/likun/)<br>
+[Buzhen Huang](https://www.buzhenhuang.com/), [Yanchi Jiang](), [Yuanbo Li](), [Yitao Xie](), [Kun Li](https://cic.tju.edu.cn/faculty/likun/)<br>
 
 [\[Project\]](https://www.buzhenhuang.com/), [\[Paper\]]()<br><br>
 ![figure](/assets/Pipeline.png)
@@ -69,7 +69,7 @@ If you find this work useful, please consider citing:
 ```bibtex
 @article{huang2026groupint,
   title={GroupInt: Group-Centric Crowd Reconstruction via Multi-Scale Interaction Analysis},
-  author={Huang, Buzhen and Jiang, Yanchi and Xie, Yitao and Li, Kun},
+  author={Huang, Buzhen and Jiang, Yanchi and Li, Yuanbo and Xie, Yitao and Li, Kun},
   year={2026}
 }
 ```
